@@ -1,31 +1,37 @@
-import numpy as np
-from cav import CAV
+def _tcav_sub_computation(
+	self,
+	scores: Dict[str, Dict[str, Dict[str, Tensor]]],
+	layer: str,
+	attribs: Tensor,
+	cavs: Tensor,
+	classes: List[List[int]],
+	experimental_sets: List[List[Concept]],
+) -> None:
+	
 
-class Testing:
-	def __init__(self,target,concepts,bottlenecks,activation_generator,alphas,random_counterpart=None,cav_dir=None,num_random_exp=5, random_concepts=None):
-		self.target = target
-		self.concepts = concepts
-		self.bottlenecks = bottlenecks
-		self.activation_generator = activation_generator
-		self.alphas = alphas
-		self.random_counterpart = random_counterpart
-		self.cav_dir = cav_dir
-		self.num_random_exp = num_random_exp
-		self.random_concepts = random_concepts
+	tcav_score = torch.matmul(attribs.float(), torch.transpose(cavs, 1, 2))
+	
+	
+	assert len(tcav_score.shape) == 3
+	assert attribs.shape[0] == tcav_score.shape[1]
+	
 
+	sign_count_score = torch.mean((tcav_score > 0.0).float(), dim=1)
+	magnitude_score = torch.mean(tcav_score, dim=1)
 
-	def get_direction_dir_sign(mymodel, act, cav, concept, class_id, example):
-		grad = np.reshape(mymodel.get_gradient(
-			act, [class_id], cav.bottleneck), -1)
-		dot_prod = np.dot(grad, cav.get_direction(concept))
-		return dot_prod < 0
+	for i, (cls_set, concepts) in enumerate(zip(classes, experimental_sets)):
+		concepts_key = concepts_to_str(concepts)
 
-	def compute_tcav_score(mymodel,target_class,concept,cav,class_acts,examples)
-		count = 0
-		class_id = mymodel.label_to_id(target_class)
-		for i in range(len(class_acts)):
-			act = np.expand_dims(class_acts[i], 0)
-			example = examples[i]
-			if Testing.get_direction_dir_sign(mymodel, act, cav, concept, class_id, example):
-				count += 1
-		return float(count) / float(len(class_acts))
+		concept_ord = [concept.id for concept in concepts]
+		class_ord = {cls_: idx for idx, cls_ in enumerate(cls_set)}
+
+		new_ord = torch.tensor([class_ord[cncpt] for cncpt in concept_ord], device=tcav_score.device)
+
+		scores[concepts_key][layer] = {
+			"sign_count": torch.index_select(
+				sign_count_score[i, :], dim=0, index=new_ord
+			),
+			"magnitude": torch.index_select(
+				magnitude_score[i, :], dim=0, index=new_ord
+			),
+		}
