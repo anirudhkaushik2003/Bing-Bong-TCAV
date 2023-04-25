@@ -24,6 +24,13 @@ class Concept:
         self.id = id
         self.name = name
         self.data_iter = data_iter
+
+    @property
+    def identifier(self) -> str:
+        return "%s-%s" % (self.name, self.id)
+
+    def __repr__(self) -> str:
+        return "Concept(%r, %r)" % (self.id, self.name)
         
 class CAV:
     def __init__(
